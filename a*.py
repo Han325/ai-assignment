@@ -24,6 +24,8 @@ class State:
     
  
     def heuristic(state_position, rubbish_positions, goal_position):
+        # Using the Manhattan distance heuristic. Adaptable to hexagonal grid
+
         # If all rubbish is collected, heuristic is just the distance to the disposal room
         if not rubbish_positions:
             return hex_distance(state_position, goal_position)
