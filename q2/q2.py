@@ -1,3 +1,5 @@
+import heapq  # Using heapq for a priority queue
+
 # Definitions
 RUBBISH_WEIGHTS = {
     "orange": 5,
@@ -6,98 +8,94 @@ RUBBISH_WEIGHTS = {
     "purple": 30,
 }
 
-# Helper function to calculate the distance between the hexagons
+# Helper function to calculate the distance between hexagons
 def hex_distance(a, b):
     ax, ay = a
     bx, by = b
-    return (abs(ax - bx) + abs(ax + ay - bx - by) + abs(ay - by)) / 2
-
+    return (abs(ax - bx) + abs(ax + ay - bx - by) + abs(ay - by)) // 2
 
 class State:
-    def __init__(self, position, collected_rubbish, energy_used):
+    def __init__(self, position, collected_rubbish, energy_used, parent=None):
         self.position = position
-        self.collected_rubbish = collected_rubbish  # weights of collected rubbish
+        self.collected_rubbish = collected_rubbish
         self.energy_used = energy_used
+        self.parent = parent
+
+    def __lt__(self, other):
+        return self.energy_used < other.energy_used
+
+    def is_goal(self, disposal_room, total_rubbish):
+        return self.position == disposal_room and all(rubbish in self.collected_rubbish for rubbish in total_rubbish)
 
     def energy_to_move(self):
-        return 1 + len([w for w in self.collected_rubbish if w >= 10])
-    
- 
-    def heuristic(state_position, rubbish_positions, goal_position):
-        # Using the Manhattan distance heuristic. Adaptable to hexagonal grid
+        additional_energy = sum(weight // 10 for weight in self.collected_rubbish)
+        return 1 + additional_energy
 
-        # If all rubbish is collected, heuristic is just the distance to the disposal room
+    @staticmethod
+    def heuristic(state_position, rubbish_positions, goal_position):
         if not rubbish_positions:
             return hex_distance(state_position, goal_position)
-        
-        # Otherwise, find the closest rubbish and compute the sum of the distances
-        distances = [hex_distance(state_position, rubbish_pos) for rubbish_pos in rubbish_positions]
-        closest_rubbish_distance = min(distances)
-        disposal_distance = hex_distance(rubbish_positions[distances.index(closest_rubbish_distance)], goal_position)
+
+        closest_rubbish = min(rubbish_positions, key=lambda pos: hex_distance(state_position, pos))
+        closest_rubbish_distance = hex_distance(state_position, closest_rubbish)
+        disposal_distance = hex_distance(closest_rubbish, goal_position)
+
         return closest_rubbish_distance + disposal_distance
-    
 
-def a_star_search(initial_position, goal_position, rubbish_positions):
-    open_list = []  # priority queue, ordered by f = g + h
-    closed_list = []
-    start_state = State(initial_position, [], 0)
-    # Calculate f for the start state
-    h_start = State.heuristic(start_state.position, rubbish_positions, goal_position)
-    f_start = start_state.energy_used + h_start  # g(n) is 0 for start state
+def a_star_search(entry_point, disposal_room, rubbish_positions):
+    open_list = []  # Priority queue
+    closed_set = set()  # Set to store visited states
 
-    # Add start state to the open list
-    open_list.append((f_start, start_state))
+    # Start with the entry point state
+    start_state = State(entry_point, frozenset(), 0)
+    start_state_f_score = start_state.energy_used + State.heuristic(start_state.position, rubbish_positions, disposal_room)
+    heapq.heappush(open_list, (start_state_f_score, start_state))
 
     while open_list:
-        # Get the state with the lowest f from the open list
-        current_state = min(open_list, key=lambda x: x[0])[1]
-        open_list = [item for item in open_list if item[1] != current_state]
-        closed_list.append(current_state)
+        current_f_score, current_state = heapq.heappop(open_list)
 
-        # If this state is the goal, reconstruct the path and return it
-        if current_state.position == goal_position:
-            path = [current_state.position]
-            while current_state.position != initial_position:
-                current_state = min([state for state in closed_list if state.position == current_state.position],
-                                   key=lambda x: x.energy_used)
-                path.insert(0, current_state.position)
-            return path
+        # Check if we've reached the goal
+        if current_state.is_goal(disposal_room, rubbish_positions.values()):
+            # Reconstruct the path
+            path = []
+            while current_state:
+                path.append(current_state.position)
+                current_state = current_state.parent
+            return path[::-1], current_f_score  # Return the reversed path and the total energy used
 
-        # Generate successor states and set their g, h, and f values
-        successors = []
-        for neighbor in [(current_state.position[0] + 1, current_state.position[1]),
-                         (current_state.position[0] - 1, current_state.position[1]),
-                         (current_state.position[0], current_state.position[1] + 1),
-                         (current_state.position[0], current_state.position[1] - 1)]:
-            # Check if the neighbor is within the grid
-            if neighbor[0] >= -2 and neighbor[1] >= -2:
-                # Check if the neighbor is not blocked by rubbish
-                if neighbor not in rubbish_positions or neighbor in current_state.collected_rubbish:
-                    # Calculate the new state
-                    collected_rubbish = current_state.collected_rubbish.copy()
-                    if neighbor in rubbish_positions:
-                        collected_rubbish.append(rubbish_positions[neighbor])
-                    new_state = State(neighbor, collected_rubbish, current_state.energy_used + current_state.energy_to_move())
-                    # Calculate h and f for the new state
-                    h_new = State.heuristic(new_state.position, rubbish_positions, goal_position)
-                    f_new = new_state.energy_used + h_new
+        closed_set.add((current_state.position, current_state.collected_rubbish))
 
-                    successors.append((f_new, new_state))
+        # Generate children
+        for direction in [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)]:
+            # Get a new position based on the direction
+            new_position = (current_state.position[0] + direction[0], current_state.position[1] + direction[1])
 
-        for successor in successors:
-            # If successor is in the closed list and has a lower or equal f, skip
-            if any(successor[1].position == state.position and successor[0] >= state.energy_used + State.heuristic(state.position, rubbish_positions, goal_position) for state in closed_list):
+            # Skip invalid positions
+            if new_position not in rubbish_positions and new_position != disposal_room:
                 continue
-            # If successor is in the open list and has a lower or equal f, skip
-            if any(successor[1].position == state[1].position and successor[0] >= state[0] for state in open_list):
+
+            # Calculate the new state's collected rubbish
+            new_collected_rubbish = set(current_state.collected_rubbish)
+            if new_position in rubbish_positions:
+                new_collected_rubbish.add(rubbish_positions[new_position])
+            new_collected_rubbish = frozenset(new_collected_rubbish)  # Make it hashable
+
+            # Create a new state based on the new position
+            new_state = State(new_position, new_collected_rubbish, current_state.energy_used + current_state.energy_to_move(), current_state)
+
+            # Skip if this new state has already been visited
+            if (new_state.position, new_state.collected_rubbish) in closed_set:
                 continue
-            # Otherwise, add successor to the open list
-            open_list.append(successor)
 
-    # If no solution found
-    return None
+            # Calculate the f score for the new state
+            new_f_score = new_state.energy_used + State.heuristic(new_state.position, rubbish_positions, disposal_room)
 
-# Mapping figure 1 to code
+            # Add the new state to the open list
+            heapq.heappush(open_list, (new_f_score, new_state))
+
+    # If no path is found
+    return None, None
+
 # Define rooms with axial coordinates
 entry_point = (-1, 2)  # Axial coordinates for the entry
 disposal_room = (2, 3)  # Axial coordinates for the disposal room
@@ -106,15 +104,22 @@ disposal_room = (2, 3)  # Axial coordinates for the disposal room
 rubbish_positions = {
     (1, 1): 5,   # Orange
     (0, 2): 5,   # Orange
-    (1, 2): 5,   # Orange
+    (1, 2): 30,  # Purple
     (2, 2): 5,   # Orange
-    (-1, 3): 10,  # Green
-    (0, 3): 10,  # Green
-    (1, 3): 10,  # Green
-    (0, 4): 20,  # Blue
+    (-1, 3): 10, # Teal
+    (0, 3): 10,  # Teal
+    (1, 3): 10,  # Teal
+    (0, 4): 5,   # Orange
     (2, 1): 20,  # Blue
     (-2, 2): 30  # Purple
 }
 
-# Calling the function
-# a_star_search(initial_position=entry_point, goal_position=disposal_room, rubbish_positions=rubbish_positions)
+# Execute the search
+path, energy_used = a_star_search(entry_point, disposal_room, rubbish_positions)
+
+# Print the results
+if path:
+    print("Path to take:", path)
+    print("Total energy used:", energy_used)
+else:
+    print("No path found.")
