@@ -1,226 +1,148 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Nov 18 13:52:05 2023
+import heapq  # Using heapq for a priority queue
 
-@author: amad
-"""
+# Definitions
+RUBBISH_WEIGHTS = {
+    "orange": 5,
+    "teal": 10,
+    "blue": 20,
+    "purple": 30,
+}
 
-# Collections module used for the Counters container.
-# Time module used to find the time taken to reach the solution and the delay when displaying the path.
-import collections
-import time
 
-# Definition of the Agent class.
-class Agent:
-    def __init__(self, agent, can_operate):
-        self.agent = agent
-        # Attribute used to determine if Agent is allowed to operate the transport.
-        self.can_operate = can_operate 
-    
-    def show(self):
-        return("Agent: {}".format(self.agent))
-    
-# Definition for the River Crossing Puzzle problem class.   
-class Puzzle:
-    # Class variables for the unexpanded and expanded states in the search.
-    unexpanded = []
-    expanded = []
-    def __init__(self, start_state, max_depth) -> None:
-        self.unexpanded.append(start_state) 
-        self.max_depth = max_depth
-        
-    # Depth First Search algorithm with depth limit.
-    def DFS(self):
-        # Loop until a solution is found or depth limit is reached.
-        while True:
-            try:
-                # Get the last state from the unexpanded list (LIFO).
-                head = self.unexpanded[-1]
-               # Check if the state is valid.
-                if head.isValid():
-                    # Check if the state is the goal state.
-                    if head.isGoal():
-                        # Display that the solution is found and path.
-                        self.path(head, 0.5) 
-                        print('Solution Found.')
-                        return
-                    
-                    # Check if the state can be expanded further.
-                    if not self.expansion(head):
-                        # Mark the state as expanded, remove from unexpanded.
-                        self.expanded.append(head) 
-                        self.unexpanded.pop(-1)
-                        
-                        # If depth limit is not reached, add children to unexpanded.
-                        if head.depth < self.max_depth:
-                            self.unexpanded.extend(head.generator())  
-                    else:
-                        # If state has been expanded before, remove from unexpanded.
-                        self.unexpanded.pop(-1)
-                else:
-                    # If state is not valid, remove from unexpanded.
-                    self.unexpanded.pop(-1)
-            except IndexError:
-                # Catch IndexError (empty unexpanded list) and print depth limit.
-                print('Depth Limit : {}'.format(self.max_depth))
-                return
-                
-    # Method to check if given state has been expanded before through comparison.
-    def expansion(self, state):
-        # Loop through the list of expanded states.
-        for node in self.expanded:
-            # Check if the current expanded state is equal to the given state.
-            if (collections.Counter(node.origin) == collections.Counter(state.origin) and
-                collections.Counter(node.destination) == collections.Counter(state.destination) and 
-                node.transport == state.transport):
-                # If there is a match, the state has been expanded before.
-                return True
-        # If no match is found, the state has not been expanded before.
-        return False
-          
-    # Display the path (current state) from the root state to the given state with a delay between each step.
-    def path(self, state, delay):
-        # Print the representation of the current state.
-        print(state.show(), '\n')
-        # Loop until the root state (parent is None)
-        while state.parent != None:
-            # Introduce a delay for visualization purposes.
-            time.sleep(delay)
-            # Move to the parent state and prints its representation.
-            state = state.parent
-            print(state.show(), '\n')
-          
-# Create unique agent objects.           
-criminal = Agent("Criminal", False)
-policeman = Agent("Policeman", True)
-mother = Agent("Mother", True)
-father = Agent("Father", True)
-child = Agent("Child", False)
+# Helper function to calculate the distance between hexagons
+def hex_distance(a, b):
+    ax, ay = a
+    bx, by = b
+    return (abs(ax - bx) + abs(ax + ay - bx - by) + abs(ay - by)) // 2
 
-# Definition of the State class, representing a state in the puzzle.
+
 class State:
-    # Initialize the State object with specific attributes.
-    def __init__(self, destination, origin, transport, depth, parent) :
-        self.origin = origin
-        self.destination = destination
-        self.transport = transport
-        self.depth = depth
+    def __init__(self, position, collected_rubbish, energy_used, parent=None):
+        self.position = position
+        self.collected_rubbish = collected_rubbish
+        self.energy_used = energy_used
         self.parent = parent
 
-    # Method to generate possible successor states based on the current state.
-    def generator(self):
-        states = []
-        
-        # Determine the current and other locations based on the transport location
-        if self.transport :
-            current_location = self.destination
-            other_location = self.origin
-        else:
-            current_location = self.origin
-            other_location = self.destination
-        
-        # Iterate over agents in the current location to generate successor states
-        for agent in  current_location:
-            for agent2 in current_location:
-                # Create copies of current and other locations to avoid modifying the original state
-                current_location_copy = current_location.copy()
-                other_location_copy = other_location.copy()
-                
-                # Skip iteration if the same agent is selected twice
-                if agent == agent2:
-                    continue
-                if not agent.can_operate and not agent2.can_operate:
-                    continue
-                if not self.transportValidation([agent, agent2]):
-                    continue
-                    
-                # Update the current location
-                current_location_copy.remove(agent)
-                current_location_copy.remove(agent2)
+    def __lt__(self, other):
+        return self.energy_used < other.energy_used
 
-                # Update the other location
-                other_location_copy.append(agent)
-                other_location_copy.append(agent2)
-                
-                # Create a new state based on the transport location
-                if self.transport: 
-                    new_state = State(current_location_copy, other_location_copy, False, self.depth + 1, self)
-                else:
-                    new_state = State(other_location_copy,current_location_copy, True, self.depth + 1, self)
-                    
-                # Append the new state to the list if it's not already present
-                if not new_state in states: 
-                    states.append(new_state)
-                    
-            # Iterate over agents in the current location for single-agent movements
-            for Agent in current_location:
-                # Create copies of current and other locations to avoid modifying the original state
-                current_location_copy = current_location.copy()
-                other_location_copy = other_location.copy()
-                
-                if Agent.can_operate:
-                    # Update the current and other locations for a single-agent movement
-                    current_location_copy.remove(Agent)
-                    other_location_copy.append(Agent)
-                    
-                    # Create a new state based on the transport location
-                    if self.transport: 
-                        new_state = State(current_location_copy, other_location_copy, False, self.depth + 1, self)
-                    else:
-                        new_state = State(other_location_copy, current_location_copy, True, self.depth + 1, self)
-                    states.append(new_state)    
-                    
-        return states
-        
-    # Method to check if the current state is valid based on location validation.
-    def isValid(self):
-        if self.locationValidation(self.origin) and self.locationValidation(self.destination): 
-            return True
-        return False
-
-    # Method to check the validity of a given location based on the rules of the puzzle.
-    def locationValidation(self, location):
-        if mother not in location and father not in location and child in location: 
-            return False
-        elif criminal in location and len(location) > 1 and policeman not in location: 
-            return False
-        else: 
-            return True
-    
-    # Method to check the validity of current agents on the transport based on the rules of the puzzle.
-    def transportValidation(self, transport):
-        if criminal in transport and policeman not in transport: 
-            return False
-        else: 
-            return True
-
-    # Method to check if the current state is the goal state by checking if Origin is empty.         
-    def isGoal(self):
-        if len(self.origin) == 0: 
-            return True
-        return False
-
-    # Definition of the show method for this State, displays a formatted representation of the current state.
-    def show(self):
-        result = 'Origin: {}\nDestination: {}\nTransport is at {}'.format(
-            [item.show() for item in self.destination],
-            [item.show() for item in self.origin],
-            'Origin <-' if self.transport else 'Destination ->'
+    def is_goal(self, disposal_room, total_rubbish):
+        return self.position == disposal_room and all(
+            rubbish in self.collected_rubbish for rubbish in total_rubbish
         )
-        return result
 
-# Initial state space where each agent is at the origin. 
-INITIAL_STATE = State([], [policeman, criminal, child, father, mother], False, 0, None)
+    def energy_to_move(self):
+        additional_energy = sum(weight // 10 for weight in self.collected_rubbish)
+        return 1 + additional_energy
 
-# Definition of the main function, with a max depth of 20.
-def main():
-    Puzzle(INITIAL_STATE, 20).DFS()
-    
-if __name__ == '__main__':
-    # Record the start time.
-    start = time.time()
-    main()
-    # Record the end time.
-    end = time.time()
-    # Print elapsed time.
-    print(end - start)
+    @staticmethod
+    def heuristic(state_position, rubbish_positions, goal_position):
+        if not rubbish_positions:
+            return hex_distance(state_position, goal_position)
+
+        closest_rubbish = min(
+            rubbish_positions, key=lambda pos: hex_distance(state_position, pos)
+        )
+        closest_rubbish_distance = hex_distance(state_position, closest_rubbish)
+        disposal_distance = hex_distance(closest_rubbish, goal_position)
+
+        return closest_rubbish_distance + disposal_distance
+
+
+def a_star_search(entry_point, disposal_room, rubbish_positions):
+    open_list = []  # Priority queue
+    closed_set = set()  # Set to store visited states
+
+    # Start with the entry point state
+    start_state = State(entry_point, frozenset(), 0)
+    start_state_f_score = start_state.energy_used + State.heuristic(
+        start_state.position, rubbish_positions, disposal_room
+    )
+    heapq.heappush(open_list, (start_state_f_score, start_state))
+
+    while open_list:
+        current_f_score, current_state = heapq.heappop(open_list)
+
+        # Check if we've reached the goal
+        if current_state.is_goal(disposal_room, rubbish_positions.values()):
+            # Reconstruct the path
+            path = []
+            while current_state:
+                path.append(current_state.position)
+                current_state = current_state.parent
+            return (
+                path[::-1],
+                current_f_score,
+            )  # Return the reversed path and the total energy used
+
+        closed_set.add((current_state.position, current_state.collected_rubbish))
+
+        # Generate children
+        for direction in [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)]:
+            # Get a new position based on the direction
+            new_position = (
+                current_state.position[0] + direction[0],
+                current_state.position[1] + direction[1],
+            )
+
+            # Skip invalid positions
+            if new_position not in rubbish_positions and new_position != disposal_room:
+                continue
+
+            # Calculate the new state's collected rubbish
+            new_collected_rubbish = set(current_state.collected_rubbish)
+            if new_position in rubbish_positions:
+                new_collected_rubbish.add(rubbish_positions[new_position])
+            new_collected_rubbish = frozenset(new_collected_rubbish)  # Make it hashable
+
+            # Create a new state based on the new position
+            new_state = State(
+                new_position,
+                new_collected_rubbish,
+                current_state.energy_used + current_state.energy_to_move(),
+                current_state,
+            )
+
+            # Skip if this new state has already been visited
+            if (new_state.position, new_state.collected_rubbish) in closed_set:
+                continue
+
+            # Calculate the f score for the new state
+            new_f_score = new_state.energy_used + State.heuristic(
+                new_state.position, rubbish_positions, disposal_room
+            )
+
+            # Add the new state to the open list
+            heapq.heappush(open_list, (new_f_score, new_state))
+
+    # If no path is found
+    return None, None
+
+
+# Define rooms with axial coordinates
+entry_point = (-1, 2)  # Axial coordinates for the entry
+disposal_room = (2, 3)  # Axial coordinates for the disposal room
+
+# Define rubbish positions with their weights
+rubbish_positions = {
+    (1, 1): 5,  # Orange
+    (0, 2): 5,  # Orange
+    (1, 2): 30,  # Purple
+    (2, 2): 5,  # Orange
+    (-1, 3): 10,  # Teal
+    (0, 3): 10,  # Teal
+    (1, 3): 10,  # Teal
+    (0, 4): 5,  # Orange
+    (2, 1): 20,  # Blue
+    (-2, 2): 30,  # Purple
+}
+
+# Execute the search
+path, energy_used = a_star_search(entry_point, disposal_room, rubbish_positions)
+
+# Print the results
+if path:
+    print("Path to take:", path)
+    print("Total energy used:", energy_used)
+else:
+    print("No path found.")
