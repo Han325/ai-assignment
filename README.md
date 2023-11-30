@@ -11,7 +11,7 @@ This repository contains solutions for the CSC3206 AI assignment, specifically P
 
   
 
-1.  **IDDFS (Iterative Deepening Depth-First Search)**: Implemented as the solution for Question 1.
+1.  **Depth-Limited Search**: Implemented as the solution for Question 1.
 
 2.  ***A* Search Algorithm**: Implemented as the solution for Question 2.
 
@@ -21,7 +21,7 @@ This repository contains solutions for the CSC3206 AI assignment, specifically P
 
   
 
--  `q1/`: Contains the implementation of the IDDFS algorithm.
+-  `q1/`: Contains the implementation of the Depth-Limited Search algorithm.
 
 -  `q2/`: Contains the implementation of the A* search algorithm.
 
@@ -41,7 +41,7 @@ This repository contains solutions for the CSC3206 AI assignment, specifically P
 
 ```
 
-cd q1/ # for IDDFS solution
+cd q1/ # for Depth-Limited Search solution
 
 ```
 
